@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>貓咪疊疊樂</title>
+<style>
+  :root {
+    --ink: #3b2a20;
+    --paper: #fff8ec;
+    --accent: #e8794a;
+    --tray: #f3e2c7;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #f6e7d0; color: var(--ink);
+    font-family: "Noto Sans TC", system-ui, sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
+  canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  #hud { position: fixed; top: 0; left: 0; right: 0; display: flex; gap: 12px; align-items: flex-start;
+    justify-content: space-between; padding: 12px 16px; pointer-events: none; }
+  #hud .box { background: var(--paper); border: 3px solid var(--ink); border-radius: 14px; padding: 6px 12px;
+    box-shadow: 3px 3px 0 var(--ink); pointer-events: auto; }
+  #stageName { font-weight: 800; }
+  #hint { font-size: 13px; opacity: .8; margin-top: 2px; max-width: 46vw; }
+  #height { font-size: 26px; font-weight: 900; font-variant-numeric: tabular-nums; text-align: right; }
+  #best { font-size: 13px; text-align: right; }
+  .btns { display: flex; gap: 8px; margin-top: 8px; justify-content: flex-end; }
+  button { font: inherit; font-weight: 700; color: var(--ink); background: var(--paper); border: 3px solid var(--ink);
+    border-radius: 10px; padding: 4px 10px; box-shadow: 2px 2px 0 var(--ink); cursor: pointer; }
+  button:active { transform: translate(2px,2px); box-shadow: none; }
+
+  #tray { position: fixed; left: 0; right: 0; bottom: 0; height: 110px; background: var(--tray);
+    border-top: 4px solid var(--ink); display: flex; align-items: center; gap: 10px; padding: 0 16px; overflow-x: auto; }
+  .item { position: relative; flex: 0 0 auto; width: 78px; height: 78px; border: 3px solid var(--ink); border-radius: 14px;
+    background: var(--paper); display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: grab; box-shadow: 3px 3px 0 var(--ink); touch-action: none; }
+  .item canvas { width: 60px; height: 44px; pointer-events: none; }
+  .item span { font-size: 12px; font-weight: 700; pointer-events: none; }
+  .item .count { position: absolute; top: -10px; right: -10px; background: var(--accent); color: #fff; border: 3px solid var(--ink);
+    border-radius: 999px; min-width: 28px; height: 28px; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+  .item.locked { opacity: .45; cursor: not-allowed; }
+  .item.shake { animation: shake .35s; }
+  @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+  #rotate { margin-left: auto; display: flex; gap: 8px; flex: 0 0 auto; }
+  #rotate button { width: 52px; height: 52px; font-size: 24px; padding: 0; }
+
+  #result { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(59,42,32,.35); }
+  #result.show { display: flex; }
+  #result .card { background: var(--paper); border: 4px solid var(--ink); border-radius: 20px; box-shadow: 6px 6px 0 var(--ink);
+    padding: 20px 26px; text-align: center; min-width: 260px; max-width: calc(100vw - 32px); }
+  #resHeight { font-size: 44px; font-weight: 900; }
+  #resStars { font-size: 34px; letter-spacing: 4px; color: var(--accent); }
+  #resText { margin: 4px 0 12px; }
+  #result .btns { justify-content: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div class="box">
+    <div id="stageName">第 1 關</div>
+    <div id="hint">把雜物拖上桌子疊高</div>
+  </div>
+  <div class="box">
+    <div id="height">0.00 m</div>
+    <div id="best">最佳：-</div>
+    <div class="btns">
+      <button id="soundBtn">🔊</button>
+      <button id="resetBtn">重來</button>
+    </div>
+  </div>
+</div>
+
+<div id="tray">
+  <div id="items" style="display:flex;gap:14px;padding-top:6px"></div>
+  <div id="rotate">
+    <button id="rotL" title="逆時針 (Q)">↺</button>
+    <button id="rotR" title="順時針 (E)">↻</button>
+  </div>
+</div>
+
+<div id="result">
+  <div class="card">
+    <div>貓咪坐在</div>
+    <div id="resHeight">0.00 m</div>
+    <div id="resStars">★★★</div>
+    <div id="resText"></div>
+    <div class="btns">
+      <button id="keepBtn">繼續調整</button>
+      <button id="retryBtn">再試一次</button>
+      <button id="nextBtn">下一關</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+<script>
+const { Engine, Bodies, Body, Composite, Query, Events } = Matter;
+
+// ---------- 1. 物品定義 ----------
+// 每種物品：名字、怎麼做出物理形狀、顏色、額外裝飾
+const PHYS = { friction: 0.8, frictionStatic: 1.2, restitution: 0.02, density: 0.0015 };
+const ITEMS = {
+  box:    { name: '紙箱', color: '#c8955a', make: (x, y) => Bodies.rectangle(x, y, 90, 70, PHYS),
+            deco: c => { c.fillStyle = '#e6c08a'; c.fillRect(-9, -35, 18, 70); } },
+  book:   { name: '書',   color: '#5b8bd6', make: (x, y) => Bodies.rectangle(x, y, 120, 24, PHYS),
+            deco: c => { c.fillStyle = '#fff8ec'; c.fillRect(-56, -6, 100, 12); } },
+  pillow: { name: '枕頭', color: '#9fd3e0', make: (x, y) => Bodies.rectangle(x, y, 100, 40, { ...PHYS, chamfer: { radius: 16 } }),
+            deco: c => { c.beginPath(); c.arc(0, 0, 4, 0, 7); c.fillStyle = '#3b2a20'; c.fill(); } },
+  can:    { name: '罐頭', color: '#d9534f', make: (x, y) => Bodies.rectangle(x, y, 38, 60, PHYS),
+            deco: c => { c.fillStyle = '#fff8ec'; c.fillRect(-19, -10, 38, 20); c.fillStyle = '#3b2a20'; c.font = 'bold 12px sans-serif'; c.textAlign = 'center'; c.fillText('魚', 0, 5); } },
+  ball:   { name: '毛線球', color: '#f28fb1', make: (x, y) => Bodies.circle(x, y, 26, PHYS),
+            deco: c => { c.strokeStyle = '#c9577f'; c.lineWidth = 3; for (const r of [10, 18]) { c.beginPath(); c.arc(-8, 6, r, -1.6, 0.2); c.stroke(); } } },
+  pudding:{ name: '布丁', color: '#f5c94c', make: (x, y) => Bodies.trapezoid(x, y, 80, 50, 0.45, PHYS),
+            deco: c => { c.fillStyle = '#8a4b1f'; c.fillRect(-22, -25, 44, 9); } },
+  cheese: { name: '起司', color: '#ffd84d', make: (x, y) => Bodies.polygon(x, y, 3, 42, PHYS),
+            deco: c => { c.fillStyle = '#e0b52a'; for (const [a, b, r] of [[-6, -8, 5], [8, 6, 4], [-4, 12, 3]]) { c.beginPath(); c.arc(a, b, r, 0, 7); c.fill(); } } },
+  ruler:  { name: '尺', color: '#8fcf7a', make: (x, y) => Bodies.rectangle(x, y, 160, 16, PHYS),
+            deco: c => { c.strokeStyle = '#3b2a20'; c.lineWidth = 2; for (let i = -70; i <= 70; i += 14) { c.beginPath(); c.moveTo(i, -8); c.lineTo(i, i % 28 === 0 ? 0 : -3); c.stroke(); } } },
+  block:  { name: '積木', color: '#a98be0', make: (x, y) => Bodies.polygon(x, y, 6, 30, PHYS),
+            deco: c => { c.fillStyle = '#fff8ec'; c.font = 'bold 22px sans-serif'; c.textAlign = 'center'; c.fillText('A', 0, 8); } },
+  cat:    { name: '貓咪', color: '#f0a35e', make: (x, y) => Bodies.rectangle(x, y, 70, 46, { ...PHYS, chamfer: { radius: 18 } }),
+            under: c => { // 耳朵畫在身體後面
+              c.fillStyle = '#f0a35e'; c.strokeStyle = '#3b2a20'; c.lineWidth = 3;
+              for (const s of [-1, 1]) { c.beginPath(); c.moveTo(s * 30, -10); c.lineTo(s * 22, -36); c.lineTo(s * 8, -20); c.closePath(); c.fill(); c.stroke(); }
+            },
+            deco: c => {
+              c.fillStyle = '#3b2a20';
+              for (const s of [-1, 1]) { c.beginPath(); c.arc(s * 13, -4, 3.5, 0, 7); c.fill(); }
+              c.beginPath(); c.moveTo(-3, 4); c.lineTo(3, 4); c.lineTo(0, 8); c.fill();
+              c.strokeStyle = '#3b2a20'; c.lineWidth = 1.5;
+              for (const s of [-1, 1]) for (const dy of [4, 9]) { c.beginPath(); c.moveTo(s * 10, dy + 2); c.lineTo(s * 30, dy); c.stroke(); }
+            } },
+};
+
+// ---------- 2. 關卡 ----------
+// tableW：桌子寬度（越窄越難）  items：要放完的雜物  stars：拿到 1/2/3 顆星的高度(m)
+const STAGES = [
+  { tableW: 260, items: { box: 2, book: 1, pillow: 1, can: 1 }, stars: [1.6, 2.3, 2.9] },
+  { tableW: 220, items: { box: 1, book: 2, pudding: 1, ball: 1, cheese: 1, ruler: 1 }, stars: [1.4, 2.0, 2.6] },
+  { tableW: 170, items: { ruler: 2, ball: 2, cheese: 1, pudding: 1, block: 1, can: 1, pillow: 1 }, stars: [1.4, 2.0, 2.6] },
+  { tableW: 120, items: { box: 2, book: 2, ruler: 1, pillow: 1, can: 2, block: 1, ball: 1, cheese: 1, pudding: 1 }, stars: [2.0, 2.8, 3.6] },
+];
+const PX_PER_M = 100;   // 100 像素 = 1 公尺
+const FLOOR_Y = 250;    // 地板高度：東西掉到這裡就回到托盤
+const TRAY_H = 110;
+
+// ---------- 3. 遊戲狀態 ----------
+const engine = Engine.create({ positionIterations: 10, velocityIterations: 8 });
+const world = engine.world;
+let stageIdx = 0, table = null;
+let tray = {};                  // 托盤裡還剩幾個：{ box: 2, ... }
+let held = null;                // 正在拖的東西：{ body, offX, offY, pointerId }
+let phase = 'build';            // 'build' 建造中 / 'done' 量完了
+let settleFrames = 0;           // 整座塔連續靜止了幾格
+let lockMeasure = false;        // 按「繼續調整」後，要動過東西才會再量
+let soundOn = true, puffs = [];
+const cam = { scale: 1 };
+let pointer = { x: 0, y: 0 };
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const $ = id => document.getElementById(id);
+
+function loadBest(i) { try { return parseFloat(localStorage.getItem('catTowerBest' + i)) || 0; } catch { return 0; } }
+function saveBest(i, v) { try { localStorage.setItem('catTowerBest' + i, v); } catch {} }
+
+// ---------- 4. 關卡開始 / 重來 ----------
+function startStage(i) {
+  stageIdx = i;
+  Composite.clear(world, false);
+  const s = STAGES[i];
+  table = Bodies.rectangle(0, 15, s.tableW, 30, { isStatic: true, friction: 1, frictionStatic: 2 });
+  table.plugin.kind = 'table';
+  Composite.add(world, table);
+  tray = { ...s.items, cat: 1 };
+  held = null; phase = 'build'; settleFrames = 0; lockMeasure = false; puffs = [];
+  $('result').classList.remove('show');
+  $('stageName').textContent = `第 ${i + 1} 關 / ${STAGES.length}`;
+  updateBest();
+  renderTray();
+}
+
+function junkLeft() { return Object.entries(tray).reduce((n, [k, v]) => k === 'cat' ? n : n + v, 0); }
+function placedBodies() { return Composite.allBodies(world).filter(b => b !== table && (!held || b !== held.body)); }
+function catInWorld() { return placedBodies().find(b => b.plugin.kind === 'cat'); }
+
+// ---------- 5. 托盤 ----------
+function renderTray() {
+  const wrap = $('items');
+  wrap.innerHTML = '';
+  for (const [kind, count] of Object.entries(tray)) {
+    if (count <= 0) continue;
+    const def = ITEMS[kind];
+    const el = document.createElement('div');
+    el.className = 'item';
+    const locked = kind === 'cat' && junkLeft() > 0;
+    if (locked) el.classList.add('locked');
+    const cv = document.createElement('canvas');
+    drawIcon(cv, kind);
+    el.append(cv);
+    const label = document.createElement('span');
+    label.textContent = locked ? '🔒 ' + def.name : def.name;
+    el.append(label);
+    if (count > 1) { const c = document.createElement('div'); c.className = 'count'; c.textContent = count; el.append(c); }
+    el.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      if (held || phase === 'done') return;
+      if (locked) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); setHint('先把其他雜物都放上去，貓咪才會來！'); return; }
+      tray[kind]--;
+      renderTray();
+      const w = toWorld(e.clientX, e.clientY);
+      const body = ITEMS[kind].make(w.x, w.y);
+      body.plugin.kind = kind;
+      Composite.add(world, body);
+      grab(body, 0, 0, e.pointerId);
+    });
+    wrap.append(el);
+  }
+}
+
+function drawIcon(cv, kind) {
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = 60 * dpr; cv.height = 44 * dpr;
+  const c = cv.getContext('2d');
+  const body = ITEMS[kind].make(0, 0);
+  const bw = body.bounds.max.x - body.bounds.min.x, bh = body.bounds.max.y - body.bounds.min.y + (kind === 'cat' ? 16 : 0);
+  const s = Math.min(54 / bw, 38 / bh) * dpr;
+  c.setTransform(s, 0, 0, s, cv.width / 2, cv.height / 2 + (kind === 'cat' ? 6 * dpr : 0));
+  drawBody(c, body, false);
+}
+
+// ---------- 6. 拿起 / 放下 ----------
+function grab(body, offX, offY, pointerId) {
+  held = { body, offX, offY, pointerId };
+  Body.setStatic(body, true);   // 拿著的時候不受重力
+  body.isSensor = true;         // 也不會推開別人
+  lockMeasure = false;
+  settleFrames = 0;
+  moveHeld();
+}
+
+function moveHeld() {
+  if (!held) return;
+  const w = toWorld(pointer.x, pointer.y);
+  Body.setPosition(held.body, { x: w.x + held.offX, y: w.y + held.offY });
+}
+
+function overlapping(body) {
+  const others = Composite.allBodies(world).filter(o => o !== body);
+  return Query.collides(body, others).length > 0;
+}
+
+function release() {
+  const b = held.body;
+  held = null;
+  const overTray = pointer.y > innerHeight - TRAY_H;
+  if (overTray || overlapping(b)) { backToTray(b, false); return; }
+  b.isSensor = false;
+  Body.setStatic(b, false);     // 放手！交給物理引擎
+  Body.setVelocity(b, { x: 0, y: 0 });
+  Body.setAngularVelocity(b, 0);
+}
+
+function backToTray(b, withPuff) {
+  Composite.remove(world, b);
+  tray[b.plugin.kind]++;
+  if (withPuff) puffs.push({ x: b.position.x, y: FLOOR_Y - 10, t: 0 });
+  renderTray();
+}
+
+function rotateHeld(dir) {
+  if (held) Body.setAngle(held.body, held.body.angle + dir * Math.PI / 12);
+}
+
+// ---------- 7. 輸入 ----------
+canvas.addEventListener('pointerdown', e => {
+  pointer = { x: e.clientX, y: e.clientY };
+  if (held || phase === 'done') return;
+  const w = toWorld(e.clientX, e.clientY);
+  const hits = Query.point(placedBodies(), w);
+  if (!hits.length) return;
+  const b = hits[hits.length - 1];
+  grab(b, b.position.x - w.x, b.position.y - w.y, e.pointerId);
+});
+addEventListener('pointermove', e => {
+  if (held && e.pointerId !== held.pointerId) return;
+  pointer = { x: e.clientX, y: e.clientY };
+  moveHeld();
+});
+addEventListener('pointerup', e => {
+  if (!held || e.pointerId !== held.pointerId) return;
+  pointer = { x: e.clientX, y: e.clientY };
+  release();
+});
+addEventListener('pointercancel', e => { if (held && e.pointerId === held.pointerId) backToTray(held.body, false), held = null; });
+addEventListener('wheel', e => rotateHeld(Math.sign(e.deltaY)), { passive: true });
+addEventListener('keydown', e => {
+  if (e.key === 'q' || e.key === 'Q') rotateHeld(-1);
+  if (e.key === 'e' || e.key === 'E') rotateHeld(1);
+});
+$('rotL').addEventListener('pointerdown', e => { e.preventDefault(); rotateHeld(-1); });
+$('rotR').addEventListener('pointerdown', e => { e.preventDefault(); rotateHeld(1); });
+$('resetBtn').onclick = () => startStage(stageIdx);
+$('retryBtn').onclick = () => startStage(stageIdx);
+$('nextBtn').onclick = () => startStage((stageIdx + 1) % STAGES.length);
+$('keepBtn').onclick = () => { $('result').classList.remove('show'); phase = 'build'; lockMeasure = true; };
+$('soundBtn').onclick = () => { soundOn = !soundOn; $('soundBtn').textContent = soundOn ? '🔊' : '🔇'; };
+
+// ---------- 8. 每一格的遊戲規則 ----------
+function step() {
+  Engine.update(engine, 1000 / 60);
+
+  // 掉到地板 → 回托盤（貓也一樣）
+  for (const b of placedBodies()) {
+    if (b.position.y > FLOOR_Y - 20 || Math.abs(b.position.x) > 3000) backToTray(b, true);
+  }
+
+  // 貓放上去了 → 等整座塔靜止 90 格（約 1.5 秒）再量
+  const cat = catInWorld();
+  if (!cat || held || phase !== 'build' || lockMeasure) { settleFrames = 0; return; }
+  const moving = placedBodies().some(b => b.speed > 0.06 || Math.abs(b.angularVelocity) > 0.004);
+  settleFrames = moving ? 0 : settleFrames + 1;
+  if (settleFrames >= 90) finish(cat);
+}
+
+function finish(cat) {
+  phase = 'done';
+  const h = Math.max(0, -cat.bounds.min.y / PX_PER_M);
+  const s = STAGES[stageIdx].stars;
+  const stars = s.filter(t => h >= t).length;
+  const best = loadBest(stageIdx);
+  const isBest = h > best;
+  if (isBest) saveBest(stageIdx, h.toFixed(2));
+  updateBest();
+  $('resHeight').textContent = h.toFixed(2) + ' m';
+  $('resStars').textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+  $('resText').textContent = (['貓咪：就這樣？', '貓咪：還可以啦', '貓咪：視野不錯喔', '貓咪：我是世界之王！'][stars]) + (isBest ? '　🎉 新紀錄' : '');
+  $('nextBtn').textContent = stageIdx === STAGES.length - 1 ? '回第一關' : '下一關';
+  $('result').classList.add('show');
+  playThud(6);
+}
+
+function updateBest() { const b = loadBest(stageIdx); $('best').textContent = '最佳：' + (b ? b.toFixed(2) + ' m' : '-'); }
+function setHint(t) { $('hint').textContent = t; hintTimer = 120; }
+let hintTimer = 0;
+function autoHint() {
+  if (hintTimer > 0) { hintTimer--; return; }
+  let t;
+  if (held) t = overlapping(held.body) ? '這裡卡到東西了，放不下' : '放開就放下・滾輪或 Q/E 旋轉';
+  else if (junkLeft() > 0) t = `把雜物拖上桌疊高（還剩 ${junkLeft()} 個）`;
+  else if (!catInWorld()) t = '雜物放完了！把貓咪放到最頂端';
+  else if (lockMeasure) t = '動一下東西就會重新測量';
+  else t = '測量中…不要動' + '.'.repeat(Math.floor(settleFrames / 30));
+  $('hint').textContent = t;
+}
+
+// ---------- 9. 音效 ----------
+let actx = null, lastThud = 0;
+function playThud(strength) {
+  if (!soundOn) return;
+  try {
+    actx = actx || new AudioContext();
+    const now = actx.currentTime;
+    if (now - lastThud < 0.05) return;
+    lastThud = now;
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(140 + Math.random() * 60, now);
+    o.frequency.exponentialRampToValueAtTime(50, now + 0.12);
+    g.gain.setValueAtTime(Math.min(0.4, strength * 0.05), now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+    o.connect(g).connect(actx.destination);
+    o.start(now); o.stop(now + 0.16);
+  } catch {}
+}
+Events.on(engine, 'collisionStart', e => {
+  for (const p of e.pairs) {
+    if (p.isSensor) continue;
+    const dv = Math.hypot(p.bodyA.velocity.x - p.bodyB.velocity.x, p.bodyA.velocity.y - p.bodyB.velocity.y);
+    if (dv > 1.5) playThud(dv);
+  }
+});
+
+// ---------- 10. 鏡頭與繪圖 ----------
+function groundScreenY() { return innerHeight - TRAY_H - 60; }
+function toWorld(sx, sy) { return { x: (sx - innerWidth / 2) / cam.scale, y: (sy - groundScreenY()) / cam.scale }; }
+
+function updateCamera() {
+  // 塔越高鏡頭拉越遠：最高點上方永遠留 250 像素空間
+  let top = 0;
+  for (const b of placedBodies()) top = Math.min(top, b.bounds.min.y);
+  const base = Math.min(innerWidth / 700, (innerHeight - TRAY_H) / 520, 1.6);
+  const target = Math.min(base, groundScreenY() / (-top + 250));
+  cam.scale += (target - cam.scale) * 0.05;
+}
+
+function drawBody(c, body, tint) {
+  const def = ITEMS[body.plugin.kind];
+  c.save(); c.translate(body.position.x, body.position.y); c.rotate(body.angle);
+  if (def.under) def.under(c);
+  c.restore();
+
+  c.beginPath();
+  if (body.circleRadius) c.arc(body.position.x, body.position.y, body.circleRadius, 0, Math.PI * 2);
+  else { const v = body.vertices; c.moveTo(v[0].x, v[0].y); for (let i = 1; i < v.length; i++) c.lineTo(v[i].x, v[i].y); c.closePath(); }
+  c.fillStyle = def.color; c.fill();
+
+  c.save(); c.clip();
+  c.translate(body.position.x, body.position.y); c.rotate(body.angle);
+  def.deco(c);
+  c.restore();
+
+  if (tint) { c.fillStyle = tint; c.fill(); }
+  c.strokeStyle = '#3b2a20'; c.lineWidth = 3; c.lineJoin = 'round'; c.stroke();
+}
+
+function render() {
+  const dpr = window.devicePixelRatio || 1;
+  if (canvas.width !== innerWidth * dpr || canvas.height !== innerHeight * dpr) { canvas.width = innerWidth * dpr; canvas.height = innerHeight * dpr; }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // 牆壁背景
+  const g = ctx.createLinearGradient(0, 0, 0, innerHeight);
+  g.addColorStop(0, '#fbeedd'); g.addColorStop(1, '#f1dcbc');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, innerWidth, innerHeight);
+
+  updateCamera();
+  const s = cam.scale;
+  ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * innerWidth / 2, dpr * groundScreenY());
+  const viewL = -innerWidth / 2 / s, viewR = innerWidth / 2 / s, viewT = -groundScreenY() / s;
+
+  // 壁紙直條紋
+  ctx.fillStyle = 'rgba(232,121,74,.07)';
+  for (let x = Math.floor(viewL / 80) * 80; x < viewR; x += 80) ctx.fillRect(x, viewT, 40, FLOOR_Y - viewT);
+
+  // 高度刻度
+  ctx.strokeStyle = 'rgba(59,42,32,.18)'; ctx.fillStyle = 'rgba(59,42,32,.4)'; ctx.lineWidth = 1 / s;
+  ctx.font = `${12 / s}px sans-serif`; ctx.textAlign = 'left';
+  for (let m = 1; -m * PX_PER_M > viewT; m++) {
+    const y = -m * PX_PER_M;
+    ctx.setLineDash([6 / s, 6 / s]); ctx.beginPath(); ctx.moveTo(viewL, y); ctx.lineTo(viewR, y); ctx.stroke();
+    ctx.setLineDash([]); ctx.fillText(m + ' m', viewL + 8 / s, y - 4 / s);
+  }
+
+  // 地板
+  ctx.fillStyle = '#b07a4a'; ctx.fillRect(viewL, FLOOR_Y, viewR - viewL, 2000);
+  ctx.fillStyle = '#e8794a'; ctx.beginPath(); ctx.ellipse(0, FLOOR_Y + 14, 220, 18, 0, 0, 7); ctx.fill();
+
+  // 桌子（桌腳 + 桌面）
+  const tw = STAGES[stageIdx].tableW;
+  ctx.fillStyle = '#7a4e2d'; ctx.strokeStyle = '#3b2a20'; ctx.lineWidth = 3;
+  for (const x of [-tw / 2 + 12, tw / 2 - 30]) { ctx.fillRect(x, 30, 18, FLOOR_Y - 30); ctx.strokeRect(x, 30, 18, FLOOR_Y - 30); }
+  ctx.fillStyle = '#9c6a3f'; ctx.fillRect(-tw / 2, 0, tw, 30); ctx.strokeRect(-tw / 2, 0, tw, 30);
+
+  // 物品
+  for (const b of placedBodies()) drawBody(ctx, b, null);
+  if (held) {
+    ctx.globalAlpha = 0.8;
+    drawBody(ctx, held.body, overlapping(held.body) ? 'rgba(220,40,40,.45)' : null);
+    ctx.globalAlpha = 1;
+  }
+
+  // 掉落的煙霧
+  for (const p of puffs) {
+    p.t++;
+    ctx.fillStyle = `rgba(255,255,255,${1 - p.t / 30})`;
+    for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(p.x + Math.cos(i * 1.3) * p.t * 1.5, p.y - p.t * 0.6 + Math.sin(i * 2) * 6, 10 + p.t * 0.4, 0, 7); ctx.fill(); }
+  }
+  puffs = puffs.filter(p => p.t < 30);
+
+  // 即時高度
+  let top = 0;
+  for (const b of placedBodies()) top = Math.min(top, b.bounds.min.y);
+  $('height').textContent = (-top / PX_PER_M).toFixed(2) + ' m';
+  autoHint();
+}
+
+// ---------- 11. 主迴圈（固定 60 步/秒，物理才穩定） ----------
+let last = performance.now(), acc = 0;
+function frame(t) {
+  acc += Math.min(100, t - last); last = t;
+  while (acc >= 1000 / 60) { step(); acc -= 1000 / 60; }
+  render();
+  requestAnimationFrame(frame);
+}
+startStage(0);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
