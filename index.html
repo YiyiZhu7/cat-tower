@@ -42,7 +42,7 @@
   .item.shake { animation: shake .35s; }
   @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
   #rotate { margin-left: auto; display: flex; gap: 8px; flex: 0 0 auto; }
-  #rotate button { width: 52px; height: 52px; font-size: 24px; padding: 0; }
+  #rotate button { width: 56px; height: 52px; font-size: 15px; padding: 0; }
 
   #result { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(59,42,32,.35); }
   #result.show { display: flex; }
@@ -66,7 +66,7 @@
     <div id="height">0.00 m</div>
     <div id="best">最佳：-</div>
     <div class="btns">
-      <button id="soundBtn">🔊</button>
+      <button id="soundBtn">聲音：開</button>
       <button id="resetBtn">重來</button>
     </div>
   </div>
@@ -75,8 +75,8 @@
 <div id="tray">
   <div id="items" style="display:flex;gap:14px;padding-top:6px"></div>
   <div id="rotate">
-    <button id="rotL" title="逆時針 (Q)">↺</button>
-    <button id="rotR" title="順時針 (E)">↻</button>
+    <button id="rotL" title="逆時針 (Q)">左轉</button>
+    <button id="rotR" title="順時針 (E)">右轉</button>
   </div>
 </div>
 
@@ -142,8 +142,10 @@ const STAGES = [
   { tableW: 170, items: { ruler: 2, ball: 2, cheese: 1, pudding: 1, block: 1, can: 1, pillow: 1 }, stars: [1.4, 2.0, 2.6] },
   { tableW: 120, items: { box: 2, book: 2, ruler: 1, pillow: 1, can: 2, block: 1, ball: 1, cheese: 1, pudding: 1 }, stars: [2.0, 2.8, 3.6] },
 ];
+// 建立物品一律走這裡，順便標上種類（畫圖和回托盤都靠它）
+function makeItem(kind, x, y) { const b = ITEMS[kind].make(x, y); b.plugin.kind = kind; return b; }
 const PX_PER_M = 100;   // 100 像素 = 1 公尺
-const FLOOR_Y = 250;    // 地板高度：東西掉到這裡就回到托盤
+const FLOOR_Y = 120;    // 地板高度：東西掉到這裡就回到托盤
 const TRAY_H = 110;
 
 // ---------- 3. 遊戲狀態 ----------
@@ -211,8 +213,7 @@ function renderTray() {
       tray[kind]--;
       renderTray();
       const w = toWorld(e.clientX, e.clientY);
-      const body = ITEMS[kind].make(w.x, w.y);
-      body.plugin.kind = kind;
+      const body = makeItem(kind, w.x, w.y);
       Composite.add(world, body);
       grab(body, 0, 0, e.pointerId);
     });
@@ -224,7 +225,7 @@ function drawIcon(cv, kind) {
   const dpr = window.devicePixelRatio || 1;
   cv.width = 60 * dpr; cv.height = 44 * dpr;
   const c = cv.getContext('2d');
-  const body = ITEMS[kind].make(0, 0);
+  const body = makeItem(kind, 0, 0);
   const bw = body.bounds.max.x - body.bounds.min.x, bh = body.bounds.max.y - body.bounds.min.y + (kind === 'cat' ? 16 : 0);
   const s = Math.min(54 / bw, 38 / bh) * dpr;
   c.setTransform(s, 0, 0, s, cv.width / 2, cv.height / 2 + (kind === 'cat' ? 6 * dpr : 0));
@@ -306,7 +307,7 @@ $('resetBtn').onclick = () => startStage(stageIdx);
 $('retryBtn').onclick = () => startStage(stageIdx);
 $('nextBtn').onclick = () => startStage((stageIdx + 1) % STAGES.length);
 $('keepBtn').onclick = () => { $('result').classList.remove('show'); phase = 'build'; lockMeasure = true; };
-$('soundBtn').onclick = () => { soundOn = !soundOn; $('soundBtn').textContent = soundOn ? '🔊' : '🔇'; };
+$('soundBtn').onclick = () => { soundOn = !soundOn; $('soundBtn').textContent = soundOn ? '聲音：開' : '聲音：關'; };
 
 // ---------- 8. 每一格的遊戲規則 ----------
 function step() {
@@ -384,7 +385,7 @@ Events.on(engine, 'collisionStart', e => {
 });
 
 // ---------- 10. 鏡頭與繪圖 ----------
-function groundScreenY() { return innerHeight - TRAY_H - 60; }
+function groundScreenY() { return innerHeight - TRAY_H - (FLOOR_Y + 20) * cam.scale; }
 function toWorld(sx, sy) { return { x: (sx - innerWidth / 2) / cam.scale, y: (sy - groundScreenY()) / cam.scale }; }
 
 function updateCamera() {
