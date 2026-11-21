@@ -1,17 +1,18 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="zh-Hans">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>貓咪疊疊樂</title>
+<title>猫咪叠叠乐</title>
 <style>
   :root {
     --ink: #2d2a32;
     --paper: #fffaf0;
     --accent: #ff7a59;
     --gold: #ffc94a;
-    --font: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+    --font: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
   }
+  :root[lang="zh-Hant"] { --font: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif; }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; overflow: hidden; background: #9fd6ee; color: var(--ink);
     font-family: var(--font); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
@@ -30,7 +31,7 @@
   #score { font-size: 24px; font-variant-numeric: tabular-nums; text-align: right; line-height: 1.1; }
   #score small { display: block; font-size: 12px; font-weight: 600; }
   #left { display: flex; gap: 8px; align-items: center; }
-  #soundBtn { font-size: 13px; padding: 3px 8px; pointer-events: auto; }
+  #soundBtn, #langBtn { font-size: 13px; padding: 3px 8px; pointer-events: auto; }
 
   /* 雜物選單 */
   #menu { position: fixed; left: 50%; top: calc(76px + env(safe-area-inset-top, 0px)); display: flex; gap: 8px;
@@ -74,10 +75,11 @@
 
 <div id="hud">
   <div id="left">
-    <div class="chip" id="stageChip">第 1 關</div>
-    <button id="soundBtn">聲音：開</button>
+    <div class="chip" id="stageChip"></div>
+    <button id="soundBtn"></button>
+    <button id="langBtn"></button>
   </div>
-  <div class="chip" id="score">0.00 m<small id="bestLine">最佳 0.00 m</small></div>
+  <div class="chip" id="score">0.00 m<small id="bestLine"></small></div>
 </div>
 <div id="menu"></div>
 <div id="help"></div>
@@ -85,40 +87,73 @@
 
 <div class="overlay on" id="intro">
   <div class="card">
-    <h1>貓咪疊疊樂</h1>
-    <p>貓咪最怕水了！用雜物蓋一座高塔，<br>讓牠們離池塘越遠越好。</p>
+    <h1 data-i18n="title"></h1>
+    <p data-i18n-html="intro"></p>
     <ol>
-      <li>從上面把雜物拖到木台上</li>
-      <li>每關的雜物都疊上去</li>
-      <li>最後放上貓咪，量牠坐多高</li>
-      <li>任何東西掉進水裡，遊戲就結束</li>
+      <li data-i18n="r1"></li>
+      <li data-i18n="r2"></li>
+      <li data-i18n="r3"></li>
+      <li data-i18n="r4"></li>
     </ol>
-    <button class="big" id="startBtn">開始蓋塔</button>
+    <button class="big" id="startBtn" data-i18n="start"></button>
     <p id="introBest" style="font-size:13px;margin-top:12px"></p>
   </div>
 </div>
 
 <div class="overlay" id="result">
   <div class="card">
-    <div>貓咪最高坐到</div>
+    <div data-i18n="resTitle"></div>
     <div id="resHeight">0.00 m</div>
     <div id="resStars"></div>
     <div id="resRating"></div>
     <p id="resBest"></p>
     <div class="row">
-      <button class="big" id="againBtn">再玩一次</button>
-      <button id="viewBtn">看我的塔</button>
+      <button class="big" id="againBtn" data-i18n="again"></button>
+      <button id="viewBtn" data-i18n="view"></button>
     </div>
   </div>
 </div>
-<button id="closeView">關閉</button>
+<button id="closeView" data-i18n="close"></button>
 
-<script src="https://cdn.jsdelivr.net/npm/planck@1.4.2/dist/planck.min.js"></script>
+<script src="planck.min.js"></script>
 <script>
 'use strict';
 const pl = planck;
 const V = (x, y) => new pl.Vec2(x, y);
 const $ = id => document.getElementById(id);
+
+// ================= 0. 簡體 / 繁體 =================
+// 想加新文字：兩邊都要加同一個 key
+const I18N = {
+  hans: {
+    title: '猫咪叠叠乐', switch: '繁體',
+    stage: n => `第 ${n} 关`, soundOn: '声音：开', soundOff: '声音：关', best: n => `最佳 ${n} m`,
+    intro: '猫咪最怕水了！用杂物盖一座高塔，<br>让它们离池塘越远越好。',
+    r1: '从上面把杂物拖到木台上', r2: '每关的杂物都叠上去', r3: '最后放上猫咪，量它坐多高', r4: '任何东西掉进水里，游戏就结束',
+    start: '开始盖塔', resTitle: '猫咪最高坐到', again: '再玩一次', view: '看我的塔', close: '关闭',
+    help1: '从上面拖一样东西到木台上', help2: '把其他杂物也叠上去', help3: '最后放上猫咪，量量它有多高！', help4: '继续往上盖！可以上下拖动画面',
+    ratings: ['猫咪掉进水里了…', '小土丘等级', '树屋等级', '公寓楼等级', '摩天大楼等级', '云端猫宫殿！'],
+    newBest: '新纪录！', yourBest: n => `你的最佳：${n} m`, introBest: n => `你的最佳纪录：${n} m`,
+    items: ['猫咪', '木托盘', '旧门板', '纸箱', '木箱', '油漆桶', '塑料桶', '花盆', '洗衣机', '床垫', '鱼缸', '游泳圈', '椅子', '路锥', '洗衣袋'],
+  },
+  hant: {
+    title: '貓咪疊疊樂', switch: '简体',
+    stage: n => `第 ${n} 關`, soundOn: '聲音：開', soundOff: '聲音：關', best: n => `最佳 ${n} m`,
+    intro: '貓咪最怕水了！用雜物蓋一座高塔，<br>讓牠們離池塘越遠越好。',
+    r1: '從上面把雜物拖到木台上', r2: '每關的雜物都疊上去', r3: '最後放上貓咪，量牠坐多高', r4: '任何東西掉進水裡，遊戲就結束',
+    start: '開始蓋塔', resTitle: '貓咪最高坐到', again: '再玩一次', view: '看我的塔', close: '關閉',
+    help1: '從上面拖一樣東西到木台上', help2: '把其他雜物也疊上去', help3: '最後放上貓咪，量量牠有多高！', help4: '繼續往上蓋！可以上下拖曳畫面',
+    ratings: ['貓咪掉進水裡了…', '小土丘等級', '樹屋等級', '公寓大樓等級', '摩天大樓等級', '雲端貓宮殿！'],
+    newBest: '新紀錄！', yourBest: n => `你的最佳：${n} m`, introBest: n => `你的最佳紀錄：${n} m`,
+    items: ['貓咪', '木棧板', '舊門板', '紙箱', '木箱', '油漆桶', '塑膠桶', '花盆', '洗衣機', '床墊', '魚缸', '游泳圈', '椅子', '三角錐', '洗衣袋'],
+  },
+};
+// 預設簡體；瀏覽器是台灣／香港／澳門的繁體設定才預設繁體；玩家選過就記住
+let lang = (() => {
+  try { const v = localStorage.getItem('catTowerLang'); if (v === 'hans' || v === 'hant') return v; } catch {}
+  return /^zh-(tw|hk|mo|hant)/i.test(navigator.language || '') ? 'hant' : 'hans';
+})();
+const T = k => I18N[lang][k];
 
 // ================= 1. 世界常數（單位：公尺，y 軸朝上） =================
 const GRAVITY = -25;     // 重力調強，東西掉得比較乾脆
@@ -219,7 +254,7 @@ let drag = null;              // 正在吊著的東西 { b, ox, oy, tx, ty, pid 
 let pan = null;               // 拖曳畫面捲動
 let stage = 1, score = 0, best = loadBest();
 let status = 'intro';         // intro / play / measureWait / measure / stage / gameOverWait / gameOver / view
-let wait = 0, helpStep = 1, frameN = 0, scoreGained = false;
+let wait = 0, helpStep = 1, frameN = 0, scoreGained = false, helpKey = null, lastResult = null;
 let camBottom = CAM_MIN, S = 60, topAll = 0;
 let menuItems = [], towerSnap = null, xMark = null;
 let drops = [], ripples = [], fish = null, nextFish = 400;
@@ -258,7 +293,7 @@ function initGame() {
   camBottom = CAM_MIN; towerSnap = null; xMark = null; drag = null; pan = null;
   drops = []; ripples = [];
   $('intro').classList.remove('on'); $('result').classList.remove('on');
-  if (helpStep < 5) { helpStep = 1; showHelp('從上面拖一樣東西到木台上'); }
+  if (helpStep < 5) { helpStep = 1; showHelp('help1'); }
   initStage();
 }
 
@@ -276,7 +311,7 @@ function initStage() {
   }));
   buildMenu();
   $('menu').classList.add('on');
-  $('stageChip').textContent = `第 ${stage} 關`;
+  $('stageChip').textContent = T('stage')(stage);
 }
 
 function buildMenu() {
@@ -285,7 +320,7 @@ function buildMenu() {
   for (const mi of menuItems) {
     const el = document.createElement('div');
     el.className = 'slot' + (mi.ti === 0 ? ' cat' : '') + (mi.done ? ' done' : '');
-    el.title = TYPES[mi.ti].name;
+    el.title = T('items')[mi.ti];
     const cv = document.createElement('canvas');
     const dpr = devicePixelRatio || 1;
     cv.width = cv.height = 56 * dpr;
@@ -301,8 +336,8 @@ function buildMenu() {
   }
 }
 
-function showHelp(text) { $('help').textContent = text; $('help').classList.add('on'); }
-function hideHelp() { $('help').classList.remove('on'); }
+function showHelp(key) { helpKey = key; $('help').textContent = T(key); $('help').classList.add('on'); }
+function hideHelp() { helpKey = null; $('help').classList.remove('on'); }
 
 // ================= 5. 吊起 / 放下 =================
 function toWorld(sx, sy) { return { x: (sx - innerWidth / 2) / S, y: camBottom + (innerHeight - sy) / S }; }
@@ -348,8 +383,8 @@ function releaseDrag() {
   const left = menuItems.filter(m => !m.done);
   if (!left.length) { status = 'measureWait'; wait = 50; return; }
   $('menu').classList.add('on');
-  if (helpStep === 2) { showHelp('把其他雜物也疊上去'); helpStep = 3; }
-  else if (helpStep === 3 && left.length === 1 && left[0].ti === 0) { showHelp('最後放上貓咪，量量牠有多高！'); helpStep = 4; }
+  if (helpStep === 2) { showHelp('help2'); helpStep = 3; }
+  else if (helpStep === 3 && left.length === 1 && left[0].ti === 0) { showHelp('help3'); helpStep = 4; }
 }
 
 // ================= 6. 輸入 =================
@@ -377,7 +412,7 @@ $('startBtn').onclick = () => { audioInit(); sfx.button(); initGame(); };
 $('againBtn').onclick = () => { sfx.button(); initGame(); };
 $('viewBtn').onclick = () => { if (!towerSnap) return; sfx.button(); status = 'view'; $('result').classList.remove('on'); $('closeView').style.display = 'block'; };
 $('closeView').onclick = () => { sfx.button(); status = 'gameOver'; $('closeView').style.display = 'none'; $('result').classList.add('on'); };
-$('soundBtn').onclick = () => { soundOn = !soundOn; $('soundBtn').textContent = soundOn ? '聲音：開' : '聲音：關'; if (master) master.gain.value = soundOn ? 1 : 0; };
+$('soundBtn').onclick = () => { soundOn = !soundOn; $('soundBtn').textContent = T(soundOn ? 'soundOn' : 'soundOff'); if (master) master.gain.value = soundOn ? 1 : 0; };
 
 // ================= 7. 每一格的遊戲規則 =================
 function step() {
@@ -433,7 +468,7 @@ function step() {
       if (scoreGained || !towerSnap) towerSnap = snapshot();
       sfx.level();
       status = 'stage'; wait = 100; stage++;
-      $('banner').textContent = `第 ${stage} 關`; $('banner').classList.add('on');
+      $('banner').textContent = T('stage')(stage); $('banner').classList.add('on');
     }
   } else if (status === 'stage') {
     const target = Math.max(CAM_MIN, topAll + 3.2 + 160 / S - innerHeight / S);
@@ -442,7 +477,7 @@ function step() {
       $('banner').classList.remove('on');
       status = 'play';
       initStage();
-      if (helpStep >= 3 && helpStep < 5) { showHelp('繼續往上蓋！可以上下拖曳畫面'); helpStep = 5; }
+      if (helpStep >= 3 && helpStep < 5) { showHelp('help4'); helpStep = 5; }
     }
   } else if (status === 'gameOverWait') {
     camBottom += (CAM_MIN - camBottom) * .1;
@@ -467,15 +502,21 @@ function gameOver() {
   const isBest = score > best;
   if (isBest) { best = score; saveBest(best); }
   const rating = score <= 0 ? 0 : score < 4 ? 1 : score < 8 ? 2 : score < 12 ? 3 : score < 16 ? 4 : 5;
-  $('resHeight').textContent = score.toFixed(2) + ' m';
-  $('resStars').textContent = '★'.repeat(rating) + '☆'.repeat(5 - rating);
-  $('resRating').textContent = ['貓咪掉進水裡了…', '小土丘等級', '樹屋等級', '公寓大樓等級', '摩天大樓等級', '雲端貓宮殿！'][rating];
-  $('resBest').textContent = isBest && score > 0 ? '新紀錄！' : `你的最佳：${best.toFixed(2)} m`;
-  $('resBest').className = isBest && score > 0 ? 'new' : '';
+  lastResult = { rating, isBest: isBest && score > 0 };
+  fillResult();
   $('viewBtn').style.display = towerSnap ? '' : 'none';
   if (score > 0) sfx.gameOver(); else sfx.meow(.4);
   if (isBest && score > 0) setTimeout(sfx.highScore, 900);
   setTimeout(() => { if (status === 'gameOver') $('result').classList.add('on'); }, 1000);
+}
+
+function fillResult() {
+  const { rating, isBest } = lastResult;
+  $('resHeight').textContent = score.toFixed(2) + ' m';
+  $('resStars').textContent = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+  $('resRating').textContent = T('ratings')[rating];
+  $('resBest').textContent = isBest ? T('newBest') : T('yourBest')(best.toFixed(2));
+  $('resBest').className = isBest ? 'new' : '';
 }
 
 function snapshot() {
@@ -485,7 +526,7 @@ function snapshot() {
 
 function updateHud() {
   $('score').firstChild.textContent = score.toFixed(2) + ' m';
-  $('bestLine').textContent = '最佳 ' + best.toFixed(2) + ' m';
+  $('bestLine').textContent = T('best')(best.toFixed(2));
 }
 
 // 貓咪的表情：被晃到會嚇到、會看著你吊著的東西、沒事會東張西望
@@ -554,7 +595,7 @@ function ambient() {
 
 // ================= 9. 畫面 =================
 const ctx = canvas.getContext('2d');
-const FONT = getComputedStyle(document.documentElement).getPropertyValue('--font');
+let FONT = getComputedStyle(document.documentElement).getPropertyValue('--font');
 const CLOUDS = Array.from({ length: 40 }, (_, i) => ({ x: Math.random() * 18 - 9, y: 2 + i * 1.9 + Math.random() * 1.5, w: .6 + Math.random() * .8, sp: .05 + Math.random() * .15 }));
 const STARS = Array.from({ length: 90 }, () => ({ x: Math.random(), y: Math.random(), r: Math.random() * 1.4 + .3 }));
 const SKY = [[0, [159, 214, 238], [230, 245, 240]], [15, [110, 168, 230], [191, 224, 245]], [35, [42, 63, 128], [111, 143, 208]], [60, [13, 20, 51], [42, 63, 128]]];
@@ -852,7 +893,28 @@ function frame(t) {
   while (acc >= 1000 / 60 && n < 4) { step(); acc -= 1000 / 60; n++; }
   render(t);
 }
-$('introBest').textContent = best > 0 ? `你的最佳紀錄：${best.toFixed(2)} m` : '';
+function applyLang() {
+  document.documentElement.lang = lang === 'hans' ? 'zh-Hans' : 'zh-Hant';
+  document.title = T('title');
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = T(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = T(el.dataset.i18nHtml); });
+  $('langBtn').textContent = T('switch');
+  $('stageChip').textContent = T('stage')(stage);
+  $('soundBtn').textContent = T(soundOn ? 'soundOn' : 'soundOff');
+  $('banner').textContent = T('stage')(stage);
+  $('introBest').textContent = best > 0 ? T('introBest')(best.toFixed(2)) : '';
+  if (helpKey) $('help').textContent = T(helpKey);
+  if (lastResult) fillResult();
+  document.querySelectorAll('.slot').forEach((el, i) => { el.title = T('items')[menuItems[i].ti]; });
+  FONT = getComputedStyle(document.documentElement).getPropertyValue('--font');
+  updateHud();
+}
+$('langBtn').onclick = () => {
+  lang = lang === 'hans' ? 'hant' : 'hans';
+  try { localStorage.setItem('catTowerLang', lang); } catch {}
+  sfx.button(); applyLang();
+};
+applyLang();
 newWorld();
 requestAnimationFrame(frame);
 </script>
